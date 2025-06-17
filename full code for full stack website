@@ -1,0 +1,68 @@
+from flask import Flask, render_template, request, redirect, url_for, flash
+from pymongo import MongoClient
+from pymongo.server_api import ServerApi
+from dotenv import load_dotenv
+import os
+from pathlib import Path
+
+# Verify .env loading
+env_path = Path('.') / '.env'
+if not env_path.exists():
+    raise FileNotFoundError(f".env file not found at: {env_path.absolute()}")
+
+load_dotenv()  # Now load the environment
+
+print("Environment variables loaded successfully!")
+print(f"DB_NAME: {os.getenv('DB_NAME')}")
+
+load_dotenv()
+
+app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key')
+
+# MongoDB Connection Setup
+uri = "mongodb+srv://ksherkhan12345:1234@cluster0.ngqs3zq.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+
+# Replace <db_password> with actual password from environment variables
+db_password = os.getenv('DB_PASSWORD')
+if not db_password:
+    raise ValueError("DB_PASSWORD environment variable is missing")
+
+uri = uri.replace("<db_password>", db_password)
+
+# Create a new client and connect to the server
+client = MongoClient(uri, server_api=ServerApi('1'))
+db = client[os.getenv('DB_NAME', 'testdb')]
+collection = db[os.getenv('COLLECTION_NAME', 'testcollection')]
+
+# Test the connection
+try:
+    client.admin.command('ping')
+    print("Pinged your deployment. You successfully connected to MongoDB!")
+except Exception as e:
+    print(f"MongoDB connection error: {e}")
+    raise
+
+@app.route('/')
+def index():
+    return render_template('form.html')
+
+@app.route('/submit', methods=['POST'])
+def submit():
+    try:
+        data = {
+            'name': request.form.get('name'),
+            'email': request.form.get('email'),
+            'message': request.form.get('message')
+        }
+        collection.insert_one(data)
+        return redirect(url_for('success'))
+    except Exception as e:
+        flash(f'Error submitting data: {str(e)}')
+        return redirect(url_for('index'))
+
+@app.route('/success')
+def success():
+    return "Data submitted successfully"
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
